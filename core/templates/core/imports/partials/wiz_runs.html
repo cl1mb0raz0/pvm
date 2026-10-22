@@ -1,0 +1,37 @@
+{# The latest Wiz runs and their steps. While one runs, the block polls itself and the page reloads with the result. #}
+<div id="wiz-runs" class="card-body stack" style="gap: 14px" {% if running %}hx-get="{% url 'core:wiz' %}" hx-trigger="every 3s" hx-target="#wiz-runs" hx-swap="outerHTML"{% endif %}>
+  {% for run in runs %}
+    <div>
+      <div class="ssh-head" style="margin-bottom: 8px">
+        <strong style="min-width: 150px">{{ run.get_kind_display }}</strong>
+        {% if run.state == "running" %}
+          <span class="badge sev-medium"><span class="spinner" aria-hidden="true"></span> Running…</span>
+          <progress value="{{ run.percent }}" max="100" style="width: 220px"></progress>
+          <span style="font-size: 12.5px">{{ run.percent }}%</span>
+          <span class="muted" style="font-size: 12.5px">Started {{ run.started_at|date:"H:i" }}{% if run.started_by %} by {{ run.started_by.username }}{% endif %}. This Page Updates by Itself.</span>
+        {% elif run.state == "failed" %}
+          <span class="badge sev-critical">Failed</span> <span class="muted">{{ run.error }}</span>
+        {% else %}
+          {% if run.failed_steps %}<span class="badge sev-high">Done With Errors {{ run.finished_at|date:"j M Y, H:i" }}</span>{% else %}<span class="badge st-resolved">Done {{ run.finished_at|date:"j M Y, H:i" }}</span>{% endif %}
+          <span class="muted" style="font-size: 12.5px">{{ run.api_calls }} Wiz API Calls</span>
+        {% endif %}
+      </div>
+      <ol class="wiz-steps">
+        {% for step in run.steps %}
+          <li class="wiz-step wiz-step-{{ step.state }}">
+            <span class="wiz-step-name">
+              {% if step.state == "done" %}✓{% elif step.state == "failed" %}✗{% elif step.state == "skipped" %}–{% elif step.state == "running" %}<span class="spinner" aria-hidden="true"></span>{% else %}·{% endif %}
+              {{ step.label }}
+            </span>
+            {% if step.state == "running" or step.state == "done" and step.total %}
+              <progress value="{% if step.state == 'done' %}{{ step.total }}{% else %}{{ step.done }}{% endif %}" max="{{ step.total|default:1 }}" style="width: 160px"></progress>
+            {% endif %}
+            <span class="muted" style="font-size: 12.5px">{{ step.detail }}</span>
+          </li>
+        {% endfor %}
+      </ol>
+    </div>
+  {% empty %}
+    <span class="muted">Nothing Imported Yet. Start with Import Wiz Issues.</span>
+  {% endfor %}
+</div>

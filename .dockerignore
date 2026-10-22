@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+staticfiles/
+scan_imports/
+backups_data/
+*.sqlite3
+*.zip
+README.md
+
+# Data and local files: never baked into the image (same as .gitignore).
+snapshots/
+github-export/
+chat
+*.tar.gz
+*.json.gz
+*.csv
+.venv/
+venv/
+.claude/
+data/
+
+# The ready-made image bundle (build script and templates), not part of the image.
+bundle/
+docs/
+CLAUDE.md

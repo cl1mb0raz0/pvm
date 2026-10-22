@@ -1,0 +1,54 @@
+{% extends "app.html" %}
+{% load pvm %}
+
+{% block title %}Wiz Vulnerabilities{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="muted" style="font-size: 12.5px"><a href="{% url 'core:vulnerability_list' %}">Vulnerabilities</a> / Wiz</div>
+    <h1 style="margin-top: 4px">Wiz</h1>
+    <p>The Vulnerabilities Wiz Found on the Hosts Brought In by Full Import. Detail Only: They Have No SLA, the Issues Do.</p>
+  </div>
+</div>
+
+<nav class="pill-tabs" aria-label="Wiz">
+  <a class="btn btn-ghost" href="{% url 'core:vulnerability_wiz' %}">Issues</a>
+  <a class="btn" href="{% url 'core:vulnerability_wiz_cves' %}" aria-current="page">Vulnerabilities</a>
+</nav>
+
+<section class="card wiz-table">
+  <div class="card-head"><h2>Vulnerabilities</h2><span class="muted" style="font-size: 12.5px">{{ total }}{% if filtered %} Matching{% endif %} of {{ all_count }}</span></div>
+  <form class="filters" method="get" action="{{ request.path }}" style="border-bottom: 0">
+    <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ dir }}">
+    <label class="field field-grow">Search Every Field<input type="search" name="q" value="{{ q }}" placeholder="CVE, Package, Version, Host, Status…"></label>
+    <label class="field">Severity<select name="severity"><option value="">Any</option>{% for value, label in severities %}<option value="{{ value }}" {% if get.severity == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="field">Exploit<select name="exploit"><option value="">Any</option><option value="yes" {% if get.exploit == "yes" %}selected{% endif %}>Known Exploit</option><option value="kev" {% if get.exploit == "kev" %}selected{% endif %}>CISA KEV</option></select></label>
+    <label class="field">Fix<select name="fix"><option value="">Any</option><option value="yes" {% if get.fix == "yes" %}selected{% endif %}>Has a Fixed Version</option><option value="no" {% if get.fix == "no" %}selected{% endif %}>No Fix Known</option></select></label>
+    <label class="field">Host<select name="asset"><option value="">Any</option>{% for pk, name in assets %}<option value="{{ pk }}" {% if get.asset == pk|stringformat:"s" %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+    <button class="btn btn-ghost" type="submit">Search and Filter</button>
+    {% if filtered %}<a class="btn btn-ghost" href="{{ request.path }}">Clear</a>{% endif %}
+  </form>
+  {% if page.object_list %}
+    <div class="table-wrap"><table>
+      <thead><tr>{% include "core/partials/sortable_headers.html" %}<th>Wiz</th></tr></thead>
+      <tbody>{% for v in page.object_list %}
+        <tr><td class="mono">{{ v.name }}</td><td>{% if v.severity %}<span class="badge sev-{{ v.severity|lower }}">{{ v.severity|title }}</span>{% else %}—{% endif %}</td><td class="num">{{ v.score|default:"—" }}</td>
+          <td><a href="{% url 'core:wiz_asset' v.asset.wiz_id %}">{{ v.asset.name|default:v.asset.wiz_id }}</a></td>
+          <td>{{ v.package|default:"—" }}</td><td class="mono">{{ v.version|default:"—" }}</td><td class="mono">{{ v.fixed_version|default:"—" }}</td>
+          <td>{% if v.has_cisa_kev %}<strong class="wiz-critical">CISA KEV</strong>{% elif v.has_exploit %}Known Exploit{% else %}—{% endif %}</td>
+          <td>{{ v.first_detected_at|date:"Y-m-d" }}</td><td>{% if v.link %}<a href="{{ v.link }}" target="_blank" rel="noopener">Open</a>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <div class="results-meta">
+      <span>{{ total }} Vulnerabilit{{ total|pluralize:"y,ies" }}{% if page.paginator.num_pages > 1 %} · Page {{ page.number }} of {{ page.paginator.num_pages }}{% endif %}</span>
+      {% if page.has_other_pages %}<nav class="pager">
+        {% if page.has_previous %}<a href="?{{ query }}&page={{ page.previous_page_number }}">← Previous</a>{% endif %}
+        {% if page.has_next %}<a href="?{{ query }}&page={{ page.next_page_number }}">Next →</a>{% endif %}
+      </nav>{% endif %}
+    </div>
+  {% else %}
+    <div class="empty">{% if all_count %}No Vulnerability Matches.{% else %}No Vulnerability Yet: Run a Full Import in <a href="{% url 'core:wiz' %}">Imports &gt; Wiz</a>.{% endif %}</div>
+  {% endif %}
+</section>
+{% endblock %}

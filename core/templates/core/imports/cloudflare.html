@@ -1,0 +1,107 @@
+{% extends "app.html" %}
+
+{% block title %}Cloudflare{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Cloudflare</h1>
+    <p>The Servers Sit Behind Cloudflare, So a Scan of a Site Reaches Cloudflare, Not the Server. The DNS Records Say Where Cloudflare Sends Each Proxied Site: Pvm Reads Them and, When You Apply, Sets That Address as the Host's Private IP. Loading Changes Nothing; Applying Takes a Backup First.</p>
+  </div>
+</div>
+
+<section class="card">
+  {% if not configured %}
+    <div class="card-body notice-danger" style="border: 0"><strong>The API Is Not Configured.</strong> <span class="muted">Set CLOUDFLARE_API_TOKEN in .env (a Read-Only Token with Zone Read and DNS Read), Then Restart the Stack. You Can Still Load a File Below.</span></div>
+  {% endif %}
+  {% include "core/imports/partials/cloudflare_status.html" %}
+  <form method="post" action="{% url 'core:cloudflare_upload' %}" enctype="multipart/form-data" class="card-body stack" style="gap: 12px; border-top: 1px solid var(--border)">
+    {% csrf_token %}
+    <label class="field">Or Load a File<input type="file" name="file" accept=".txt,.zone,.bind,.json,.csv,text/plain,application/json,text/csv" required></label>
+    <p class="muted" style="margin: 0; font-size: 12.5px">
+      The Zone File from the Dashboard (DNS &gt; Records &gt; Export), the API's JSON, or a CSV with the Columns name, type, content, proxied. A New Load, from the API or a File, Replaces the Previous One. Nightly at 03:15 the API Is Read Again When a Token Is Set.
+    </p>
+    <div><button class="btn btn-ghost" type="submit">Load File</button></div>
+  </form>
+</section>
+
+{% if current %}
+<section class="card" style="margin-top: 14px">
+  <div class="card-head">
+    <h2>Hosts Behind Cloudflare</h2>
+    <span class="muted" style="font-size: 12.5px">
+      {{ planned|length }} Host{{ planned|length|pluralize }} Match a Proxied Record · {{ counts.new }} New · {{ counts.changed }} Changed · {{ counts.same }} Same{% if counts.direct %} · {{ counts.direct }} Scanned Directly{% endif %}{% if counts.unresolved %} · {{ counts.unresolved }} Unresolved{% endif %}
+    </span>
+  </div>
+  {% if planned %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Host</th><th>Scanned IP</th><th>Record</th><th>Origin</th><th>Private IP Now</th><th>Would Be</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for r in planned %}
+            <tr>
+              <td><a href="{% url 'core:host_detail' r.host.pk %}">{{ r.host.hostname }}</a></td>
+              <td class="mono" style="font-size: 12px">{{ r.host.ip_address }}</td>
+              <td class="mono" style="font-size: 12px">{% for rec in r.records %}{{ rec.type }} {{ rec.content }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+              <td class="mono" style="font-size: 12px">{{ r.origins|join:", "|default:"—" }}</td>
+              <td class="mono" style="font-size: 12px">{{ r.current|join:", "|default:"—" }}</td>
+              <td class="mono" style="font-size: 12px">{% if r.status == "new" or r.status == "changed" %}{{ r.target|join:", " }}{% else %}—{% endif %}</td>
+              <td>
+                {% if r.status == "unresolved" %}<span class="muted">Unresolved: the Record Leads Outside the Load</span>
+                {% elif r.status == "direct" %}<span class="muted">Scanned on the Origin Itself</span>
+                {% else %}{{ r.status|title }}{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body" style="border-top: 1px solid var(--border)">
+      {% if to_change %}
+        <form method="post" action="{% url 'core:cloudflare_apply' %}">
+          {% csrf_token %}
+          <button class="btn" type="submit">Apply to {{ to_change }} Host{{ to_change|pluralize }}</button>
+          <span class="muted" style="font-size: 12.5px; margin-left: 8px">A Backup Is Taken First. Hosts of Later Imports Get Theirs When They Are Created.</span>
+        </form>
+      {% else %}
+        <span class="muted">Nothing to Apply: No Host Would Change.</span>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="empty">No Host in Pvm Matches a Proxied Record. Hosts Are Matched by Their Host Name.</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top: 14px">
+  <div class="card-head">
+    <h2>Records</h2>
+    <span class="muted" style="font-size: 12.5px">{{ total }}{% if q %} Matching{% endif %} · {{ proxied }} Proxied{% if total > shown %} · First {{ shown }} Shown{% endif %}</span>
+  </div>
+  <form class="filters" method="get" style="border-bottom: 0">
+    <label class="field field-grow">Name or Content<input type="search" name="q" value="{{ q }}"></label>
+    <button class="btn btn-ghost" type="submit">Search</button>
+    {% if q %}<a class="btn btn-ghost" href="{% url 'core:cloudflare' %}">Clear</a>{% endif %}
+  </form>
+  {% if records %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Type</th><th>Content</th><th>Proxied</th><th>Zone</th></tr></thead>
+        <tbody>
+          {% for r in records %}
+            <tr>
+              <td class="mono" style="font-size: 12px">{{ r.name }}</td>
+              <td>{{ r.type }}</td>
+              <td class="mono" style="font-size: 12px">{{ r.content }}</td>
+              <td>{% if r.proxied %}Yes{% elif r.proxied is False %}<span class="muted">No</span>{% else %}<span class="muted">Unknown</span>{% endif %}</td>
+              <td>{{ r.zone_name|default:"—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">No Record Matches{% if q %} “{{ q }}”{% endif %}.</div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

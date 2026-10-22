@@ -1,0 +1,131 @@
+{% extends "app.html" %}
+{% load pvm %}
+
+{% block title %}Qualys Pm{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Qualys Pm</h1>
+    <p>Checks Your Windows Hosts' Open Findings against Qualys Patch Management: Which Patch (KB) Resolves the QID, and Whether Qualys Says It Is Missing or Installed. No Free Tracker Exists for Windows like Ubuntu's, So This Is Pvm's Source of Truth There; the Verdict Shows on Each Finding, Confirming It Still Needs a Person (See the Host Page).</p>
+  </div>
+</div>
+
+<section class="card">
+  {% if not configured %}
+    <div class="card-body notice-danger" style="border: 0"><strong>Qualys Pm Is Not Configured.</strong> <span class="muted">Set QUALYS_GATEWAY_URL, QUALYS_USERNAME and QUALYS_PASSWORD in .env (Same Credentials as Qualys Csam).</span></div>
+  {% else %}
+    {% include "core/imports/partials/pm_status.html" %}
+  {% endif %}
+</section>
+
+{% if configured %}
+<section class="card">
+  <form class="filters" method="get" style="border-bottom: 0" onsubmit="var b = event.submitter; if (b && b.name === 'live') { b.disabled = true; b.textContent = 'Asking Qualys…'; var h = document.createElement('input'); h.type = 'hidden'; h.name = 'live'; h.value = '1'; this.appendChild(h); }">
+    <label class="field field-grow">
+      Host, Software, Patch or KB
+      <input type="search" name="q" value="{{ q }}" placeholder="e.g. win-01, 10.0.4.30, 7-Zip, KB5029375 or SQL Server">
+    </label>
+    {% if sort %}<input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ dir }}">{% endif %}
+    <button class="btn btn-ghost" type="submit" title="Search What Pvm Already Holds; Qualys Is Not Asked">Search</button>
+    <button class="btn" type="submit" name="live" value="1" title="Ask Qualys Patch Management: Any Host or Patch, Whether or Not Pvm Has It">Search Live</button>
+    {% if q %}<a class="btn btn-ghost" href="{% url 'core:qualys_pm' %}{% if sort %}?sort={{ sort }}&amp;dir={{ dir }}{% endif %}">Clear</a>{% endif %}
+  </form>
+
+  {% if live_error %}
+    <div class="card-body notice-danger" style="border: 0"><strong>Qualys Could Not Be Asked.</strong> <span class="muted">{{ live_error }}</span></div>
+  {% elif live %}
+    <div class="card-body" style="border-top: 1px solid var(--border)">
+      <div class="muted" style="font-size: 12.5px; margin-bottom: 10px">
+        Live From Qualys Patch Management for “{{ live.query }}”:
+        {{ live.assets_read }} Assets (Read {{ live.assets_at|date:"H:i" }}) · {{ live.patches_read }} Patches (the Newest Qualys Lets This Listing Page Through; Read {{ live.patches_at|date:"H:i" }}) ·
+        {% if live.api_calls %}{{ live.api_calls }} API Calls{% else %}No API Calls, Both Listings Were Kept From Earlier{% endif %}.
+        Kept 5 Minutes (Assets) and an Hour (Patches).
+        <a href="?q={{ q|urlencode }}&amp;live=1&amp;fresh=1" title="Read Both Listings Again From Qualys (About 17 API Calls)">Read Again</a>
+      </div>
+
+      <h3 style="font-size: 14px; margin: 0 0 6px">Hosts <span class="muted" style="font-weight: 400">({{ live.hosts_total }}{% if live.hosts_total > live.hosts|length %}, First {{ live.hosts|length }} Shown{% endif %})</span></h3>
+      {% if live.hosts %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Host</th><th>Operating System</th><th>Last Scanned</th><th class="num">Missing</th><th class="num">Installed</th><th>In Pvm</th></tr></thead>
+            <tbody>
+              {% for h in live.hosts %}
+                <tr>
+                  <td>{{ h.name }}<br><span class="mono muted" style="font-size: 11.5px">{{ h.addresses|join:", " }}</span></td>
+                  <td>{{ h.os|truncatechars:60 }}</td>
+                  <td>{% if h.scanned %}{{ h.scanned|date:"j M Y" }}{% else %}—{% endif %}</td>
+                  <td class="num mono">{% if h.missing %}<strong style="color: var(--sev-critical)">{{ h.missing }}</strong>{% else %}0{% endif %}</td>
+                  <td class="num mono">{{ h.installed }}</td>
+                  <td>{% if h.pvm_host %}<a href="{% url 'core:host_detail' h.pvm_host.pk %}">{{ h.pvm_host.hostname }}</a>{% else %}<span class="muted">Not in Pvm</span>{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted" style="margin: 0 0 8px">No Asset in Qualys Patch Management Matches by Name, Address or Operating System.</p>
+      {% endif %}
+
+      <h3 style="font-size: 14px; margin: 14px 0 6px">Patches <span class="muted" style="font-weight: 400">({{ live.patches_total }}{% if live.patches_total > live.patches|length %}, Most Missing First, {{ live.patches|length }} Shown{% endif %})</span></h3>
+      {% if live.patches %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Patch</th><th>KB</th><th>CVEs</th><th class="num">Missing on</th><th class="num">Installed on</th><th>Hosts Missing It</th></tr></thead>
+            <tbody>
+              {% for p in live.patches %}
+                <tr>
+                  <td>{{ p.title|truncatechars:90 }}</td>
+                  <td class="mono">{{ p.kb|default:"—" }}</td>
+                  <td class="mono" style="font-size: 11.5px">{{ p.cves|join:", "|default:"—" }}</td>
+                  <td class="num mono">{% if p.missing %}<strong style="color: var(--sev-critical)">{{ p.missing }}</strong>{% else %}0{% endif %}</td>
+                  <td class="num mono">{{ p.installed }}</td>
+                  <td style="font-size: 12.5px">
+                    {% for h in p.hosts %}{% if h.pvm_host %}<a href="{% url 'core:host_detail' h.pvm_host.pk %}">{{ h.name }}</a>{% else %}{{ h.name }}{% endif %}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}{% if p.more %} <span class="muted">+{{ p.more }} More</span>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted" style="margin: 0">No Patch in the Catalog Matches by Title, KB, CVE or QID.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if search.state == "done" %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Windows Hosts Checked</h2>
+      <span class="muted" style="font-size: 12.5px">{{ search.missing_count }} Vulnerable, Patch Missing · {{ search.fixed_count }} Fixed · {{ search.unknown_count }} Cannot Verify</span>
+    </div>
+    {% if rows %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr>{% include "core/partials/sortable_headers.html" %}</tr></thead>
+          <tbody>
+            {% for r in rows %}
+              <tr>
+                <td><a href="{% url 'core:host_detail' r.host.pk %}?tab=vulnerabilities">{{ r.host.hostname }}</a><br><span class="mono muted" style="font-size: 11.5px">{{ r.host.ip_address }}</span>
+                  {% for h in r.hits %}<div class="muted" style="font-size: 11.5px"><strong>{{ h.label }}:</strong> <span class="mono">{{ h.texts|join:" · " }}</span>{% if h.more %} +{{ h.more }} More{% endif %}</div>{% endfor %}
+                </td>
+                <td class="num mono">{{ r.total }}</td>
+                <td class="num mono">{% if r.missing %}<strong style="color: var(--sev-critical)">{{ r.missing }}</strong>{% else %}0{% endif %}</td>
+                <td class="num mono">{{ r.fixed }}</td>
+                <td class="num mono">{{ r.unknown }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% elif q %}
+      <div class="empty">No Checked Windows Host Matches “{{ q }}”: Not by Name or Address, Installed Software, Patch, KB or Finding. Only Hosts Qualys Pm Has Checked Are Searched.</div>
+    {% else %}
+      <div class="empty">None of Your Windows Hosts Was Found in Qualys Patch Management, or Pvm Does Not Know Any Host's Operating System Yet (Imports &gt; Qualys Csam, or a Scan with an Operating System Column, Sets It).</div>
+    {% endif %}
+  </section>
+{% endif %}
+{% endblock %}

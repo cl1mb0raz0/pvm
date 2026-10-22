@@ -1,0 +1,41 @@
+# Secrets: keep .env out of the repository, always.
+.env
+.env.*
+!.env.example
+erase
+
+# Data: backups, raw Qualys reports, local databases, project snapshots.
+# They hold real hosts, addresses and findings.
+backups_data/
+scan_imports/
+snapshots/
+/data/
+*.sqlite3
+*.zip
+*.tar.gz
+*.json.gz
+
+# Real Qualys exports: never commit them.
+*.csv
+
+# Generated
+__pycache__/
+*.pyc
+staticfiles/
+.venv/
+venv/
+
+# Local tools and editors
+.claude/settings.local.json
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local tools, not part of the project
+tools/
+
+# Tests stay local, never on GitHub.
+tests*.py
+test_*.py
+**/tests/

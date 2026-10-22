@@ -1,0 +1,310 @@
+{# Standalone report: downloaded as HTML (with its own filters) and the same file WeasyPrint turns into the PDF (where the filters are not printed). #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Pvm {{ title }} · {{ made_at|date:"Y-m-d H:i" }}</title>
+  <style>
+    @page { size: A4 landscape; margin: 14mm 10mm; @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9px "DejaVu Sans", sans-serif; color: #6b7280; } }
+    body { font: 11px/1.45 "DejaVu Sans", Arial, sans-serif; color: #111827; margin: 0; padding: 18px; background: #fff; }
+    h1 { font-size: 19px; margin: 0 0 2px; }
+    .made { color: #6b7280; font-size: 10.5px; margin: 0 0 14px; }
+    .box { border: 1px solid #d1d5db; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; }
+    .box h2 { font-size: 12px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.04em; color: #374151; }
+    .pairs { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; list-style: none; }
+    .pairs li { font-size: 10.5px; }
+    .pairs b { color: #374151; font-weight: 600; }
+    .counts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .count { border: 1px solid #e5e7eb; border-radius: 5px; padding: 5px 9px; min-width: 88px; }
+    .count .n { font-size: 15px; font-weight: 700; }
+    .count .l { font-size: 9.5px; color: #6b7280; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+    .controls label { display: flex; flex-direction: column; gap: 3px; font-size: 9.5px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+    .controls input, .controls select { font: 11px "DejaVu Sans", Arial, sans-serif; color: #111827; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; min-width: 130px; }
+    .controls button { font: 11px "DejaVu Sans", Arial, sans-serif; padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #f9fafb; cursor: pointer; }
+    #shown { font-size: 10.5px; color: #6b7280; margin-left: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    th { text-align: left; background: #f3f4f6; border-bottom: 1px solid #d1d5db; padding: 5px 6px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
+    td { border-bottom: 1px solid #eef0f3; padding: 4px 6px; vertical-align: top; word-break: break-word; }
+    td.n { text-align: right; }
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { background: #e5e7eb; }
+    th .arrow { color: #6b7280; margin-left: 3px; }
+    @media print { th .arrow { display: none; } }
+    .group-bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 0 0 8px; font-size: 10.5px; color: #374151; }
+    .group-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .group-bar button { font: 11px "DejaVu Sans", Arial, sans-serif; padding: 4px 9px; border: 1px solid #d1d5db; border-radius: 4px; background: #f9fafb; cursor: pointer; }
+    .group-bar button[disabled] { opacity: 0.45; cursor: default; }
+    #group-hint { color: #6b7280; }
+    tr.group td { background: #e8edf3; font-weight: 600; cursor: pointer; border-top: 1px solid #cbd5e1; padding: 5px 6px; user-select: none; }
+    tr.group:hover td { background: #dde5ee; }
+    tr.group .caret { display: inline-block; width: 14px; color: #374151; }
+    tr.group .extra { font-weight: 400; color: #6b7280; margin-left: 6px; }
+    tr.group .extra .sev-critical { font-weight: 700; }
+    tr.is-collapsed { display: none; }
+    @media print { .group-bar, tr.group { display: none; } tr.is-collapsed { display: table-row; } }
+    .sev-critical { color: #b91c1c; font-weight: 700; }
+    .sev-high { color: #c2410c; font-weight: 700; }
+    .sev-medium { color: #a16207; }
+    .sev-low { color: #1d4ed8; }
+    /* Green: nothing left to fix here (resolved, or the installed version carries the fix). */
+    td.settled { color: #15803d; font-weight: 700; }
+    tr.settled { background: #f0fdf4; }
+    .legend { font-size: 9.5px; color: #6b7280; margin: 8px 0 0; }
+    .legend .swatch { color: #15803d; font-weight: 700; }
+    .empty { color: #6b7280; font-style: italic; }
+    footer { margin-top: 14px; color: #6b7280; font-size: 9.5px; }
+    @media print { .controls-box { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>Pvm — {{ title }}</h1>
+  <p class="made">{{ rows|length }} Row{{ rows|length|pluralize }} · Made {{ made_at|date:"j F Y, H:i" }}{% if made_by %} by {{ made_by }}{% endif %}</p>
+  {% if note %}<p class="made" style="font-style: italic">{{ note }}</p>{% endif %}
+
+  <div class="box">
+    <h2>Filters Applied</h2>
+    {% if applied %}
+      <ul class="pairs">{% for label, value in applied %}<li><b>{{ label }}:</b> {{ value }}</li>{% endfor %}</ul>
+    {% else %}
+      <p class="empty" style="margin: 0">None: Everything Pvm Holds, with the Default View of the List.</p>
+    {% endif %}
+  </div>
+
+  {% if summary %}
+    <div class="box">
+      <h2>Summary</h2>
+      <div class="counts">
+        <div class="count"><div class="n">{{ summary.total }}</div><div class="l">Total</div></div>
+        {% for label, count in summary.severities %}<div class="count"><div class="n">{{ count }}</div><div class="l">{{ label }}</div></div>{% endfor %}
+        {% for label, count in summary.priorities %}<div class="count"><div class="n">{{ count }}</div><div class="l">{{ label }}</div></div>{% endfor %}
+        {% for label, count in summary.statuses %}<div class="count"><div class="n">{{ count }}</div><div class="l">{{ label }}</div></div>{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if rows and filters %}
+    <div class="box controls-box">
+      <h2>Filter This Page</h2>
+      <div class="controls">
+        <label>Search<input type="search" id="search" placeholder="Host, QID, Title…"></label>
+        {% for f in filters %}
+          <label>{{ f.label }}
+            <select data-at="{{ f.at }}">
+              <option value="">All</option>
+              {% for value in f.values %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+            </select>
+          </label>
+        {% endfor %}
+        <button type="button" id="clear">Clear</button>
+        <span id="shown">{{ rows|length }} of {{ rows|length }} Rows</span>
+      </div>
+      <p class="legend"><span class="swatch">Green</span> = Nothing Left to Fix: Resolved, or the Installed Version Already Carries the Fix. These Filters Work in This File Alone; the Pdf and the Csv of the Same Export Hold Every Row. Click a Column Heading to Sort.</p>
+    </div>
+  {% endif %}
+
+  {% if rows %}
+    <div class="group-bar controls-box">
+      <label><input type="checkbox" id="group-toggle"> Group by Sorted Column</label>
+      <button type="button" id="collapse-all" disabled>Collapse All</button>
+      <button type="button" id="expand-all" disabled>Expand All</button>
+      <span id="group-hint"></span>
+    </div>
+    <table id="report">
+      <thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr{% if row.settled %} class="settled"{% endif %} data-keys="{{ row.keys|join:"§" }}">
+            {% for cell in row.cells %}<td{% if cell.cls %} class="{{ cell.cls }}"{% endif %}>{% if cell.href %}<a href="{{ cell.href }}">{{ cell.value }}</a>{% else %}{{ cell.value|default_if_none:"" }}{% endif %}</td>{% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">Nothing Matches These Filters.</p>
+  {% endif %}
+
+  {% if rows %}
+    <script>
+      (function () {
+        // Click a heading to sort by it, again to reverse; empty cells always go last.
+        // With "Group by Sorted Column" ticked, rows sharing the sorted value sit under a
+        // header that collapses them; filters and sorting keep working underneath.
+        var table = document.getElementById('report');
+        var body = table.tBodies[0];
+        var heads = Array.prototype.slice.call(table.tHead.rows[0].cells);
+        var rank = {critical: 4, high: 3, medium: 2, low: 1};
+        var toggle = document.getElementById('group-toggle');
+        var collapseAll = document.getElementById('collapse-all');
+        var expandAll = document.getElementById('expand-all');
+        var hint = document.getElementById('group-hint');
+        var sorted = null;       // index of the column last sorted on
+        var collapsed = {};      // "<column>\u0001<value>" -> true
+        var severityAt = heads.map(function (h) { return h.textContent.trim(); }).indexOf('Severity');
+        function dataRows() {
+          return Array.prototype.filter.call(body.rows, function (r) { return !r.classList.contains('group'); });
+        }
+        function isNumber(name) {
+          return /^(QID|Priority Score|CVSS \(NVD\)|EPSS \(%\)|Open .*|Fixed by Installed Version)$/.test(name);
+        }
+        function value(cell, name) {
+          var text = cell.textContent.trim();
+          if (!text) { return null; }
+          if (name === 'Severity' || name === 'Qualys Severity') {
+            var r = rank[text.toLowerCase().split(' ')[0]];
+            return r === undefined ? text.toLowerCase() : r;
+          }
+          if (isNumber(name)) {
+            var n = parseFloat(text.replace(',', '.'));
+            return isNaN(n) ? null : n;
+          }
+          return text.toLowerCase();
+        }
+        function sortBy(index, direction) {
+          var name = heads[index].getAttribute('data-name');
+          var keyed = dataRows().map(function (row, i) { return {row: row, i: i, v: value(row.cells[index], name)}; });
+          keyed.sort(function (a, b) {
+            if (a.v === null && b.v === null) { return a.i - b.i; }
+            if (a.v === null) { return 1; }
+            if (b.v === null) { return -1; }
+            if (a.v === b.v) { return a.i - b.i; }
+            var order = (typeof a.v === 'number' && typeof b.v === 'number') ? a.v - b.v : (a.v < b.v ? -1 : 1);
+            return direction * order;
+          });
+          keyed.forEach(function (k) { body.appendChild(k.row); });
+        }
+        function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+        function regroup() {
+          Array.prototype.slice.call(body.querySelectorAll('tr.group')).forEach(function (g) { g.parentNode.removeChild(g); });
+          var rows = dataRows();
+          rows.forEach(function (r) { r.classList.remove('is-collapsed'); });
+          var on = toggle.checked && sorted !== null;
+          collapseAll.disabled = expandAll.disabled = !on;
+          if (!on) {
+            hint.textContent = toggle.checked ? 'Click a Column Heading to Choose What to Group By' : '';
+            return;
+          }
+          var name = heads[sorted].getAttribute('data-name');
+          var groups = [];
+          rows.forEach(function (row) {
+            if (row.style.display === 'none') { return; }
+            var label = row.cells[sorted].textContent.trim();
+            var last = groups[groups.length - 1];
+            if (last && last.label === label) { last.rows.push(row); } else { groups.push({label: label, rows: [row]}); }
+          });
+          groups.forEach(function (g) {
+            var key = sorted + '\u0001' + g.label;
+            var crit = 0, high = 0, settled = 0;
+            g.rows.forEach(function (r) {
+              if (severityAt >= 0) {
+                var sev = r.cells[severityAt].textContent.trim();
+                if (sev === 'Critical') { crit++; } else if (sev === 'High') { high++; }
+              }
+              if (r.classList.contains('settled')) { settled++; }
+            });
+            var extra = [];
+            if (crit) { extra.push('<span class="sev-critical">' + crit + ' Critical</span>'); }
+            if (high) { extra.push(high + ' High'); }
+            if (settled) { extra.push(settled + ' Settled'); }
+            var tr = document.createElement('tr');
+            tr.className = 'group';
+            tr.setAttribute('data-key', key);
+            var td = document.createElement('td');
+            td.colSpan = heads.length;
+            var caret = document.createElement('span');
+            caret.className = 'caret';
+            td.appendChild(caret);
+            td.appendChild(document.createTextNode((g.label || '(Empty)') + ' · ' + plural(g.rows.length, 'Row')));
+            if (extra.length) {
+              var span = document.createElement('span');
+              span.className = 'extra';
+              span.innerHTML = '· ' + extra.join(' · ');
+              td.appendChild(span);
+            }
+            tr.appendChild(td);
+            g.rows[0].parentNode.insertBefore(tr, g.rows[0]);
+            function paint() {
+              caret.textContent = collapsed[key] ? '▸' : '▾';
+              g.rows.forEach(function (r) { r.classList.toggle('is-collapsed', !!collapsed[key]); });
+            }
+            paint();
+            tr.addEventListener('click', function () {
+              if (collapsed[key]) { delete collapsed[key]; } else { collapsed[key] = true; }
+              paint();
+            });
+            g.paint = paint;
+            g.key = key;
+          });
+          hint.textContent = 'Grouped by ' + name + ' · ' + plural(groups.length, 'Group');
+          regroup.groups = groups;
+        }
+        function setAll(state) {
+          (regroup.groups || []).forEach(function (g) {
+            if (state) { collapsed[g.key] = true; } else { delete collapsed[g.key]; }
+            g.paint();
+          });
+        }
+        toggle.addEventListener('change', regroup);
+        collapseAll.addEventListener('click', function () { setAll(true); });
+        expandAll.addEventListener('click', function () { setAll(false); });
+        // The page's own filters hide rows: groups are rebuilt from what is left.
+        document.addEventListener('pvm:filtered', regroup);
+        heads.forEach(function (th, index) {
+          var name = th.textContent.trim();
+          th.setAttribute('data-name', name);
+          th.className += ' sortable';
+          th.title = 'Click to Sort';
+          var arrow = document.createElement('span');
+          arrow.className = 'arrow';
+          th.appendChild(arrow);
+          th.addEventListener('click', function () {
+            var direction = th.getAttribute('data-dir') === '1' ? -1 : 1;
+            heads.forEach(function (h) { h.removeAttribute('data-dir'); h.lastChild.textContent = ''; });
+            th.setAttribute('data-dir', direction);
+            arrow.textContent = direction === 1 ? '▲' : '▼';
+            sorted = index;
+            sortBy(index, direction);
+            regroup();
+          });
+        });
+      })();
+    </script>
+  {% endif %}
+
+  <footer>Pvm · The Columns Left Out of This Page Are in the Csv Export of the Same Filters.</footer>
+
+  {% if rows and filters %}
+    <script>
+      (function () {
+        var rows = Array.prototype.slice.call(document.querySelectorAll('#report tbody tr'));
+        var selects = Array.prototype.slice.call(document.querySelectorAll('.controls select'));
+        var search = document.getElementById('search');
+        var shown = document.getElementById('shown');
+        function apply() {
+          var text = search.value.trim().toLowerCase();
+          var wanted = selects.map(function (s) { return {at: parseInt(s.getAttribute('data-at'), 10), value: s.value}; });
+          var count = 0;
+          rows.forEach(function (row) {
+            var keys = (row.getAttribute('data-keys') || '').split('§');
+            var ok = wanted.every(function (choice) { return !choice.value || keys[choice.at] === choice.value; });
+            if (ok && text) { ok = row.textContent.toLowerCase().indexOf(text) !== -1; }
+            row.style.display = ok ? '' : 'none';
+            if (ok) { count++; }
+          });
+          shown.textContent = count + ' of ' + rows.length + ' Rows';
+          document.dispatchEvent(new Event('pvm:filtered'));
+        }
+        selects.forEach(function (s) { s.addEventListener('change', apply); });
+        search.addEventListener('input', apply);
+        document.getElementById('clear').addEventListener('click', function () {
+          search.value = '';
+          selects.forEach(function (s) { s.value = ''; });
+          apply();
+        });
+      })();
+    </script>
+  {% endif %}
+</body>
+</html>

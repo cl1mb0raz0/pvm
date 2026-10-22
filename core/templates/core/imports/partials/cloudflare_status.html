@@ -1,0 +1,25 @@
+{# The latest Cloudflare load; polls while one runs, then the page reloads with the results. #}
+<div id="cloudflare-status" class="card-body" {% if running %}hx-get="{% url 'core:cloudflare' %}" hx-trigger="every 4s" hx-target="#cloudflare-status" hx-swap="outerHTML"{% endif %}>
+  <div class="ssh-head">
+    <strong style="min-width: 150px">DNS Records</strong>
+    {% if not run %}
+      <span class="muted">Not Loaded Yet.</span>
+    {% elif run.state == "running" %}
+      <span class="badge sev-medium"><span class="spinner" aria-hidden="true"></span> Collecting from Cloudflare…</span>
+      <span class="muted" style="font-size: 12.5px">Started {{ run.started_at|date:"H:i" }}{% if run.started_by %} by {{ run.started_by.username }}{% endif %}. This Page Updates by Itself.</span>
+    {% elif run.state == "failed" %}
+      <span class="badge sev-critical">Failed</span> <span class="muted">{{ run.error }}</span>
+    {% else %}
+      <span class="badge st-resolved">Loaded {{ run.finished_at|date:"j M Y, H:i" }}</span>
+      <span class="muted" style="font-size: 12.5px">
+        {{ run.items }} Records · {{ run.zones }} Zone{{ run.zones|pluralize }} ·
+        {% if run.source == "api" %}API, {{ run.api_calls }} Calls{% else %}File {{ run.filename }}{% endif %}
+      </span>
+    {% endif %}
+    {% if configured and not running %}
+      <form method="post" action="{% url 'core:cloudflare_collect' %}" style="margin-left: auto">
+        {% csrf_token %}<button class="btn" type="submit">{% if run %}Collect Again{% else %}Collect from Cloudflare{% endif %}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>

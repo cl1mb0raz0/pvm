@@ -1,0 +1,70 @@
+{% extends "app.html" %}
+{% load pvm %}
+
+{% block title %}Wiz Hosts{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="muted" style="font-size: 12.5px"><a href="{% url 'core:host_list' %}">Hosts</a> / Wiz</div>
+    <h1 style="margin-top: 4px">Wiz</h1>
+    <p>The Hosts Brought In by Wiz Full Import, Apart from the Main Hosts List. Tick the Ones to Add to It.</p>
+  </div>
+</div>
+
+<section class="card wiz-table">
+  <div class="card-head">
+    <h2>Imported Hosts</h2>
+    <span class="muted" style="font-size: 12.5px">{{ total }}{% if filtered %} Matching{% endif %} of {{ imported }} · Rows in <strong class="wiz-critical">Red ▲</strong> Have an Open Critical Issue, in <strong class="wiz-high">Yellow ◆</strong> an Open High One{% if total > shown %} · First {{ shown }} Shown{% endif %}</span>
+  </div>
+  {% if not imported %}
+    <div class="empty">No Host Imported Yet: Choose Some in <a href="{% url 'core:wiz' %}">Imports &gt; Wiz</a> and Press Full Import.</div>
+  {% else %}
+    {% include "core/imports/partials/wiz_filters.html" with action=request.path %}
+    {% if rows %}
+      <form method="post" action="{% url 'core:wiz_hosts_add' %}">
+        {% csrf_token %}
+        <input type="hidden" name="query" value="{{ query }}">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th><input type="checkbox" id="wiz-pick-all" aria-label="Tick All Shown Hosts"></th>{% include "core/partials/sortable_headers.html" %}<th>Pvm</th><th>Qualys</th></tr></thead>
+            <tbody>
+            {% for a in rows %}
+              <tr class="{{ a.row_class }}">
+                <td><input type="checkbox" name="asset" value="{{ a.pk }}" class="wiz-pick" aria-label="Tick {{ a.name }}"></td>
+                <td class="wiz-name"><a href="{% url 'core:wiz_asset' a.wiz_id %}">{{ a.name|default:a.wiz_id }}</a></td>
+                <td>{{ a.resource_type|enum|default:"—" }}</td>
+                <td>{{ a.cloud_platform|default:"—" }}</td>
+                <td>{{ a.region|default:"—" }}</td>
+                <td class="mono" style="font-size: 11.5px">{{ a.ip_addresses|join:", "|default:"—" }}</td>
+                <td>{% if a.exposure == "wide" %}<strong class="wiz-critical">Internet, Wide</strong>{% elif a.exposure == "limited" %}<strong class="wiz-high">Internet, Limited</strong>{% elif a.exposure == "none" %}Not Exposed{% else %}<span class="muted">Unknown</span>{% endif %}</td>
+                <td class="num">{{ a.issue_count }}{% if a.worst_severity %} <span class="badge sev-{{ a.worst_severity|lower }}">{{ a.worst_severity|title }}</span>{% endif %}</td>
+                <td class="num">{{ a.vuln_count }}</td>
+                <td title="{{ a.imported_at|date:'j M Y, H:i' }}">{{ a.imported_at|date:"j M Y" }}</td>
+                <td>{% if a.host %}<a href="{% url 'core:host_detail' a.host.pk %}">{% if a.host.wiz_only %}Wiz Only{% else %}In the Hosts List{% endif %}</a>{% endif %}</td>
+                <td class="wrap muted" style="font-size: 12px; min-width: 190px">Csam: {{ a.csam_note|default:"—" }}<br>Pm: {{ a.pm_note|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-body sticky-actions"><span id="wiz-picked" class="muted" style="font-size: 12.5px; min-width: 70px">0 Ticked</span>
+          <button class="btn" type="submit">Add Ticked to the Hosts List</button>
+          <span class="muted" style="font-size: 12.5px">Only Hosts With an Address Can Be Added; the Others Stay Here.</span>
+        </div>
+      </form>
+      <script>
+        var boxes = document.querySelectorAll(".wiz-pick"), counter = document.getElementById("wiz-picked");
+        function count() { counter.textContent = document.querySelectorAll(".wiz-pick:checked").length + " Ticked"; }
+        document.getElementById("wiz-pick-all").addEventListener("change", function (e) {
+          boxes.forEach(function (box) { box.checked = e.target.checked; });
+          count();
+        });
+        boxes.forEach(function (box) { box.addEventListener("change", count); });
+      </script>
+    {% else %}
+      <div class="empty">No Host Matches.</div>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

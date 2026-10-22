@@ -1,0 +1,88 @@
+{% extends "app.html" %}
+{% load pvm %}
+
+{% block title %}Wiz{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Wiz</h1>
+    <p>List the Hosts Wiz Raised Issues On, Tick the Ones You Want and Run a Full Import.</p>
+  </div>
+</div>
+
+<section class="card wiz-table">
+  {% if not configured %}
+    <div class="card-body notice-danger" style="border: 0"><strong>Wiz Is Not Configured.</strong> <span class="muted">Set WIZ_API_URL, WIZ_CLIENT_ID and WIZ_CLIENT_SECRET in .env (a Read-Only Wiz Service Account), Then Restart the Stack.</span></div>
+  {% else %}
+    <div class="card-head">
+      <h2>Import</h2>
+      <form method="post" action="{% url 'core:wiz_issues_start' %}" style="margin-left: auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+        {% csrf_token %}
+        <fieldset style="border: 0; padding: 0; margin: 0; display: flex; gap: 12px; align-items: center" title="Only Issues of These Severities Are Read from Wiz; None Ticked Means All">
+          <legend class="muted" style="font-size: 12.5px; float: left; margin-right: 6px">Issues</legend>
+          {% for value, label in severity_choices %}<label class="tick"><input type="checkbox" name="severity" value="{{ value }}" {% if value in default_issue_severities %}checked{% endif %}> {{ label }}</label>{% endfor %}
+        </fieldset>
+        <button class="btn" type="submit" {% if running %}disabled{% endif %}>Import Wiz Issues</button>
+      </form>
+    </div>
+    {% include "core/imports/partials/wiz_runs.html" with runs=runs %}
+  {% endif %}
+</section>
+
+{% if configured and listed %}
+<section class="card wiz-table" style="margin-top: 14px">
+  <div class="card-head">
+    <h2>Hosts With Issues</h2>
+    <span class="muted" style="font-size: 12.5px">{{ total }}{% if filtered %} Matching{% endif %} of {{ listed }} · {{ summary.critical }} Critical · {{ summary.high }} High · {{ summary.imported }} Imported · Rows in <strong class="wiz-critical">Red ▲</strong> Have an Open Critical Issue, in <strong class="wiz-high">Yellow ◆</strong> an Open High One{% if total > shown %} · First {{ shown }} Shown{% endif %}</span>
+  </div>
+  {% include "core/imports/partials/wiz_filters.html" with action=request.path %}
+  {% if rows %}
+    <form method="post" action="{% url 'core:wiz_full_start' %}">
+      {% csrf_token %}
+      <input type="hidden" name="query" value="{{ query }}">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th><input type="checkbox" id="wiz-pick-all" aria-label="Tick All Shown Hosts" title="Tick All Shown Hosts"></th>{% include "core/partials/sortable_headers.html" %}</tr></thead>
+          <tbody>
+          {% for a in rows %}
+            <tr class="{{ a.row_class }}">
+              <td><input type="checkbox" name="asset" value="{{ a.pk }}" class="wiz-pick" aria-label="Tick {{ a.name }}"></td>
+              <td class="wiz-name">{% if a.imported_at %}<a href="{% url 'core:wiz_asset' a.wiz_id %}">{{ a.name|default:a.wiz_id }}</a>{% else %}{{ a.name|default:a.wiz_id }}{% endif %}</td>
+              <td>{{ a.resource_type|enum|default:"—" }}</td>
+              <td>{{ a.cloud_platform|default:"—" }}</td>
+              <td>{{ a.region|default:"—" }}</td>
+              <td class="mono" style="font-size: 11.5px">{{ a.ip_addresses|join:", "|default:"—" }}</td>
+              <td>{% if a.exposure == "wide" %}<strong class="wiz-critical">Internet, Wide</strong>{% elif a.exposure == "limited" %}<strong class="wiz-high">Internet, Limited</strong>{% elif a.exposure == "none" %}Not Exposed{% else %}<span class="muted">Unknown</span>{% endif %}</td>
+              <td class="num">{{ a.issue_count }}{% if a.worst_severity %} <span class="badge sev-{{ a.worst_severity|lower }}">{{ a.worst_severity|title }}</span>{% endif %}</td>
+              <td>{% if a.imported_at %}<span title="{{ a.imported_at|date:'j M Y, H:i' }}">Yes</span>{% else %}<span class="muted">No</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-body sticky-actions"><span id="wiz-picked" class="muted" style="font-size: 12.5px; min-width: 70px">0 Ticked</span>
+        <fieldset style="border: 0; padding: 0; margin: 0; display: flex; gap: 12px; align-items: center" title="Only Vulnerabilities of These Severities Are Read from Wiz; None Ticked Means All">
+          <legend class="muted" style="font-size: 12.5px; float: left; margin-right: 6px">Vulnerabilities</legend>
+          {% for value, label in severity_choices %}<label class="tick"><input type="checkbox" name="severity" value="{{ value }}" {% if value in default_severities %}checked{% endif %}> {{ label }}</label>{% endfor %}
+        </fieldset>
+        <button class="btn" type="submit" name="scope" value="ticked" {% if running %}disabled{% endif %}>Full Import</button>
+        <button class="btn btn-ghost" type="submit" name="scope" value="all" {% if running %}disabled{% endif %} onclick="return confirm('Import All {{ total }} Hosts Matching the Search and the Filters?')">Full Import All {{ total }} Shown by the Filters</button>
+        <span class="muted" style="font-size: 12.5px">Reads Wiz, Then Qualys Csam and Pm.</span>
+      </div>
+    </form>
+    <script>
+      var boxes = document.querySelectorAll(".wiz-pick"), counter = document.getElementById("wiz-picked");
+      function count() { counter.textContent = document.querySelectorAll(".wiz-pick:checked").length + " Ticked"; }
+      document.getElementById("wiz-pick-all").addEventListener("change", function (e) {
+        boxes.forEach(function (box) { box.checked = e.target.checked; });
+        count();
+      });
+      boxes.forEach(function (box) { box.addEventListener("change", count); });
+    </script>
+  {% else %}
+    <div class="empty">No Host Matches.</div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

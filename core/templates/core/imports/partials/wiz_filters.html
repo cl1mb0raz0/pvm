@@ -1,0 +1,13 @@
+{# Search over every field and the filters of a list of Wiz hosts; `action` is the page, `get` the current query. #}
+{% load pvm %}
+<form class="filters" method="get" id="wiz-filters" action="{{ action }}" style="border-bottom: 0">
+  <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ dir }}">
+  <label class="field field-grow">Search Every Field<input type="search" name="q" value="{{ q }}" placeholder="Name, Address, Region, Subscription, Property, Issue Title…"></label>
+  <label class="field">Severity<select name="severity"><option value="">Any</option>{% for value, label in choices.severities %}<option value="{{ value }}" {% if get.severity == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label class="field">Type<select name="type"><option value="">Any</option>{% for v in choices.types %}<option value="{{ v }}" {% if get.type == v %}selected{% endif %}>{{ v|enum }}</option>{% endfor %}</select></label>
+  <label class="field">Cloud<select name="cloud"><option value="">Any</option>{% for v in choices.clouds %}<option value="{{ v }}" {% if get.cloud == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+  <label class="field">Region<select name="region"><option value="">Any</option>{% for v in choices.regions %}<option value="{{ v }}" {% if get.region == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+  <label class="field">Exposure<select name="exposure"><option value="">Any</option>{% for value, label in choices.exposures %}<option value="{{ value }}" {% if get.exposure == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <button class="btn btn-ghost" type="submit">Search and Filter</button>
+  {% if filtered %}<a class="btn btn-ghost" href="{{ action }}">Clear</a>{% endif %}
+</form>

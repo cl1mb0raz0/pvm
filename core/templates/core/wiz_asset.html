@@ -1,0 +1,58 @@
+{% extends "app.html" %}
+{% load pvm %}
+
+{% block title %}{{ asset.name|default:asset.wiz_id }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="muted" style="font-size: 12.5px"><a href="{% url 'core:host_list' %}">Hosts</a> / <a href="{% url 'core:wiz_hosts' %}">Wiz</a></div>
+    <h1 style="margin-top: 4px">{{ asset.name|default:asset.wiz_id }}</h1>
+    <dl class="host-meta">
+      <div><dt>Type</dt><dd>{{ asset.resource_type|enum|default:"—" }}{% if asset.native_type %} <span class="muted">({{ asset.native_type }})</span>{% endif %}</dd></div>
+      <div><dt>Cloud</dt><dd>{{ asset.cloud_platform|default:"—" }}</dd></div>
+      <div><dt>Region</dt><dd>{{ asset.region|default:"—" }}</dd></div>
+      <div><dt>Subscription</dt><dd>{{ asset.subscription|default:"—" }}</dd></div>
+      <div><dt>OS</dt><dd>{{ asset.os_name|default:"—" }}</dd></div>
+      <div><dt>Addresses</dt><dd class="mono">{{ asset.ip_addresses|join:", "|default:"—" }}</dd></div>
+      <div><dt>Internet</dt><dd>{{ exposure_label }}</dd></div>
+      <div><dt>First / Last Seen</dt><dd>{{ asset.first_seen|date:"j M Y"|default:"—" }} / {{ asset.last_seen|date:"j M Y"|default:"—" }}</dd></div>
+      <div><dt>Pvm Host</dt><dd>{% if asset.host %}<a href="{% url 'core:host_detail' asset.host.pk %}">{{ asset.host.hostname }}</a>{% if asset.host.wiz_only %} <span class="muted">(Wiz Only)</span>{% endif %}{% else %}—{% endif %}</dd></div>
+      <div><dt>Qualys Csam</dt><dd>{{ asset.csam_note|default:"—" }}</dd></div>
+      <div><dt>Qualys Pm</dt><dd>{{ asset.pm_note|default:"—" }}</dd></div>
+      <div><dt>Wiz Id</dt><dd class="mono" style="font-size: 11.5px">{{ asset.wiz_id }}</dd></div>
+    </dl>
+  </div>
+</div>
+
+<section class="card wiz-table">
+  <div class="card-head"><h2>Issues</h2><span class="muted" style="font-size: 12.5px">{{ issues|length }}</span></div>
+  {% if issues %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Severity</th><th>Issue</th><th>Type</th><th>Status</th><th>Raised</th><th>Due</th><th>Wiz</th></tr></thead>
+      <tbody>{% for i in issues %}
+        <tr><td><span class="badge sev-{{ i.severity|lower }}">{{ i.severity|title }}</span></td><td class="wrap">{{ i.title }}{% if i.recommendation %}<div class="muted" style="font-size: 12px">{{ i.recommendation|truncatechars:240 }}</div>{% endif %}</td><td>{{ i.issue_type|enum }}</td><td>{{ i.status }}</td><td>{{ i.created_at_wiz|date:"Y-m-d" }}</td><td>{{ i.due_at|date:"Y-m-d" }}</td><td>{% if i.portal_url %}<a href="{{ i.portal_url }}" target="_blank" rel="noopener">Open</a>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}<div class="empty">No Issue.</div>{% endif %}
+</section>
+
+<section class="card wiz-table" style="margin-top: 14px">
+  <div class="card-head"><h2>Vulnerabilities</h2><span class="muted" style="font-size: 12.5px">{{ vulnerability_total }}{% if vulnerability_total > 200 %} · First 200 by Score{% endif %} · <a href="{% url 'core:vulnerability_wiz_cves' %}?asset={{ asset.pk }}">Filter All in Vulnerabilities &gt; Wiz</a></span></div>
+  {% if vulnerabilities %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>CVE</th><th>Severity</th><th>Score</th><th>Package</th><th>Installed</th><th>Fixed in</th><th>Exploit</th><th>Wiz</th></tr></thead>
+      <tbody>{% for v in vulnerabilities %}
+        <tr><td class="mono">{{ v.name }}</td><td>{% if v.severity %}<span class="badge sev-{{ v.severity|lower }}">{{ v.severity|title }}</span>{% else %}—{% endif %}</td><td class="num">{{ v.score|default:"—" }}</td><td>{{ v.package|default:"—" }}</td><td class="mono">{{ v.version|default:"—" }}</td><td class="mono">{{ v.fixed_version|default:"—" }}</td><td>{% if v.has_cisa_kev %}<strong class="wiz-critical">CISA KEV</strong>{% elif v.has_exploit %}Known Exploit{% else %}—{% endif %}</td><td>{% if v.link %}<a href="{{ v.link }}" target="_blank" rel="noopener">Open</a>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}<div class="empty">No Vulnerability.</div>{% endif %}
+</section>
+
+<section class="card wiz-table" style="margin-top: 14px">
+  <details>
+    <summary class="card-head" style="cursor: pointer"><h2>Everything Wiz Said About It <span class="muted" style="font-weight: 400; font-size: 12.5px">· Click to Open</span></h2></summary>
+    <dl class="dl card-body">{% for key, value in properties %}<dt>{{ key }}</dt><dd style="white-space: pre-wrap; word-break: break-word">{{ value }}</dd>{% empty %}<dd class="muted">Nothing.</dd>{% endfor %}</dl>
+  </details>
+</section>
+{% endblock %}
