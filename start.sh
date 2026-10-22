@@ -63,7 +63,9 @@ mount_share_subfolder() {
 
 fix_permissions() {
     # All the bind-mounted folders, as this user: if Docker creates them it makes them root's.
-    mkdir -p "$PGDIR" data/redis data/scan_imports data/backups
+    mkdir -p data/redis data/scan_imports data/backups
+    # Born 700 (not 775 from the umask), so a fresh clone needs no sudo.
+    mkdir -p -m 700 "$PGDIR"
     pg_ok && return 0
 
     local fstype
@@ -73,8 +75,13 @@ fix_permissions() {
     if [ "$fstype" = "fuse.vmhgfs-fuse" ]; then
         mount_share_subfolder
     else
-        as_root chown "${PVM_UID}:${PVM_GID}" "$PGDIR"
-        as_root chmod 700 "$PGDIR"
+        # sudo only when the folder belongs to someone else.
+        if [ "$(stat -c '%u' "$PGDIR")" = "$(id -u)" ]; then
+            chmod 700 "$PGDIR"
+        else
+            as_root chmod 700 "$PGDIR"
+        fi
+        [ "$(stat -c '%u' "$PGDIR")" = "$PVM_UID" ] || as_root chown "${PVM_UID}:${PVM_GID}" "$PGDIR"
     fi
 
     if ! pg_ok; then
@@ -92,7 +99,9 @@ PVM_GID="${PVM_USER#*:}"
 if [ "${BASH_SOURCE[0]}" != "$0" ]; then return 0; fi
 
 if [ "$PVM_UID" = "0" ]; then
-    mkdir -p "$PGDIR" data/redis data/scan_imports data/backups
+    mkdir -p data/redis data/scan_imports data/backups
+    # Born 700 (not 775 from the umask), so a fresh clone needs no sudo.
+    mkdir -p -m 700 "$PGDIR"
 else
     fix_permissions
 fi
